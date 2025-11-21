@@ -72,4 +72,22 @@ export const config: Config = {
   MAX_PAGES_PER_THREAD: getEnvVar('MAX_PAGES_PER_THREAD', null) as
     | number
     | null,
+  TARGET_THREAD_URL: getEnvVar('TARGET_THREAD_URL', null) as string | null,
+  FINGERPRINT_USER_AGENT: getEnvVar(
+    'FINGERPRINT_USER_AGENT',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36'
+  ) as string,
+  FINGERPRINT_LANG: getEnvVar('FINGERPRINT_LANG', 'en-GB,en;q=0.9') as string,
+  FINGERPRINT_TIMEZONE: getEnvVar('FINGERPRINT_TIMEZONE', 'Europe/London') as
+    | string
+    | null,
+  FINGERPRINT_VIEWPORT: (() => {
+    const raw = getEnvVar('FINGERPRINT_VIEWPORT', null) as string | null
+    if (!raw) return { width: 1366, height: 768 }
+    const [w, h] = raw.split('x').map((v) => parseInt(v, 10))
+    if (Number.isFinite(w) && Number.isFinite(h)) return { width: w, height: h }
+    return { width: 1366, height: 768 }
+  })(),
+  USE_PLAYWRIGHT_FETCH: Boolean(getEnvVar('USE_PLAYWRIGHT_FETCH', false)),
+  PLAYWRIGHT_WAIT_MS: Number(getEnvVar('PLAYWRIGHT_WAIT_MS', 6000)),
 }

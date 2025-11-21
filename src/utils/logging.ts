@@ -100,7 +100,13 @@ export function printProgress(stats: ScrapingStats): void {
   }
 
   message.push(
-    chalk.white(`${EMOJI_INFO} Pages Processed: ${stats.pagesProcessed}`),
+    chalk.white(
+      `${EMOJI_INFO} Pages Processed: ${
+        stats.currentThreadTotalPages
+          ? `${stats.pagesProcessed}/${stats.currentThreadTotalPages}`
+          : stats.pagesProcessed
+      }`
+    ),
     chalk.white(
       `${EMOJI_INFO} Binaries Downloaded: ${stats.binariesDownloaded}`
     ),
@@ -126,24 +132,15 @@ export function logError(message: string, error?: Error): void {
 }
 
 export function logWarning(message: string, context?: object): void {
-  scrapingLogger.warn(
-    context,
-    boxen(chalk.yellow(`${EMOJI_WARN} ${message}`), boxStyles.warning)
-  )
+  scrapingLogger.warn(context, chalk.yellow(`${EMOJI_WARN} ${message}`))
 }
 
 export function logSuccess(message: string, context?: object): void {
-  scrapingLogger.info(
-    context,
-    boxen(chalk.green(`${EMOJI_SUCCESS} ${message}`), boxStyles.success)
-  )
+  scrapingLogger.info(context, chalk.green(`${EMOJI_SUCCESS} ${message}`))
 }
 
 export function logInfo(message: string, context?: object): void {
-  scrapingLogger.info(
-    context,
-    boxen(chalk.blue(`${EMOJI_INFO} ${message}`), boxStyles.info)
-  )
+  scrapingLogger.info(context, chalk.blue(`${EMOJI_INFO} ${message}`))
 }
 
 export function printTestModeConfig(config: Config): void {

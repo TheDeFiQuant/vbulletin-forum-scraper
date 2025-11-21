@@ -12,5 +12,6 @@ data/*.sqlite3
 
 dist/
 data/
-.env
 db-migration.ts
+.env
+bun.lockb

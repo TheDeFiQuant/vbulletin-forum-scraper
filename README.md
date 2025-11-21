@@ -76,6 +76,14 @@ The scraper will:
 - Display progress statistics
 - Handle errors gracefully
 
+To scrape a single thread without crawling the entire forum, provide its URL via env var or flag:
+
+```bash
+TARGET_THREAD_URL="https://forums.hexus.net/some-subforum/some-thread.html" bun run scrape
+# or
+bun run scrape --thread=https://forums.hexus.net/some-subforum/some-thread.html
+```
+
 ### Browsing Scraped Data 🖥️
 
 Launch the CLI viewer:
@@ -201,6 +209,7 @@ The scraper is configured using environment variables, typically set in a `.env`
 | `MAX_POSTS_PER_THREAD`     | Maximum posts to scrape per thread                | `null`                     | `number?` |
 | `MAX_PAGES_PER_SUBFORUM`   | Maximum pages to scrape per subforum              | `null`                     | `number?` |
 | `MAX_PAGES_PER_THREAD`     | Maximum pages to scrape per thread                | `null`                     | `number?` |
+| `TARGET_THREAD_URL`        | If set, scrape only this thread instead of the whole forum | `null`                     | `string?` |
 
 **Example `.env` file:**
 

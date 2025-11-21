@@ -19,6 +19,39 @@ let db: Database | null = null
 let scrapedUrls = new Set<string>()
 let downloadedFiles = new Set<string>()
 
+function ensurePostsSchema(): void {
+  const currentDB = getDatabase()
+  // Add missing forum_post_id column if not present
+  try {
+    currentDB.exec('ALTER TABLE posts ADD COLUMN forum_post_id INTEGER')
+  } catch (_err) {
+    // ignore if column already exists
+  }
+  try {
+    currentDB.exec('ALTER TABLE posts ADD COLUMN post_url TEXT')
+  } catch (_err) {
+    // ignore
+  }
+  try {
+    currentDB.exec('ALTER TABLE posts ADD COLUMN thread_post_number INTEGER')
+  } catch (_err) {
+    // ignore
+  }
+  try {
+    currentDB.exec('ALTER TABLE posts ADD COLUMN post_metadata_missing BOOLEAN')
+  } catch (_err) {
+    // ignore
+  }
+  // Ensure unique index exists
+  try {
+    currentDB.exec(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_thread_forum_post_id ON posts(thread_url, forum_post_id)'
+    )
+  } catch (_err) {
+    // ignore index creation errors
+  }
+}
+
 // Database connection and setup functions
 export function getDatabase(): Database {
   if (!db) {
@@ -93,6 +126,10 @@ export async function setupDatabase(): Promise<void> {
                 comment TEXT NOT NULL,
                 posted_at TEXT NOT NULL,
                 user_url TEXT,
+                forum_post_id INTEGER,
+                post_url TEXT,
+                thread_post_number INTEGER,
+                post_metadata_missing BOOLEAN,
                 FOREIGN KEY (thread_url) REFERENCES threads(url)
             );
             CREATE TABLE IF NOT EXISTS users (
@@ -134,6 +171,7 @@ export async function setupDatabase(): Promise<void> {
     if (!validateTables()) {
       throw new Error('Database validation failed')
     }
+    ensurePostsSchema()
   } catch (error) {
     logError(`${EMOJI_ERROR} Failed to setup database:`, error as Error)
     await closeDatabase()
@@ -154,6 +192,7 @@ export async function initialiseDatabase(): Promise<void> {
     } else {
       logWarning(`${EMOJI_INFO} Using existing database.`)
       getDatabase() //  Get connection, even if not deleting
+      ensurePostsSchema() // Apply schema upgrades for existing DBs
     }
   } else {
     getDatabase() // Create DB file if it doesn't exist
@@ -200,9 +239,33 @@ export async function getThreadsBySubforum(
 export async function getPostsByThread(threadUrl: string): Promise<Post[]> {
   const currentDB = getDatabase()
   const stmt = currentDB.prepare(
-    'SELECT id, thread_url as threadUrl, username, comment, posted_at as postedAt, user_url as userUrl FROM posts WHERE thread_url = ? ORDER BY posted_at ASC'
+    'SELECT id, thread_url as threadUrl, username, comment, posted_at as postedAt, user_url as userUrl, forum_post_id as forumPostId, post_url as postUrl, thread_post_number as threadPostNumber, post_metadata_missing as postMetadataMissing FROM posts WHERE thread_url = ? ORDER BY posted_at ASC'
   )
   return (await stmt.all(threadUrl)) as Post[]
+}
+
+export function getPostCountByThread(threadUrl: string): number {
+  const currentDB = getDatabase()
+  const stmt = currentDB.prepare(
+    'SELECT COUNT(*) as count FROM posts WHERE thread_url = ?'
+  )
+  const result = stmt.get(threadUrl) as { count: number }
+  return result?.count ?? 0
+}
+
+export function getForumPostIdsByThread(threadUrl: string): Set<number> {
+  const currentDB = getDatabase()
+  const stmt = currentDB.prepare(
+    'SELECT forum_post_id as forumPostId FROM posts WHERE thread_url = ? AND forum_post_id IS NOT NULL'
+  )
+  const rows = stmt.all(threadUrl) as { forumPostId: number }[]
+  const ids = new Set<number>()
+  for (const row of rows) {
+    if (typeof row.forumPostId === 'number') {
+      ids.add(row.forumPostId)
+    }
+  }
+  return ids
 }
 
 export async function getThreadsCountBySubforum(
@@ -348,15 +411,43 @@ export function insertPost(
   username: string,
   comment: string,
   postedAt: string,
-  userUrl: string
+  userUrl: string,
+  forumPostId: number | null,
+  postUrl: string | null,
+  threadPostNumber: number | null,
+  postMetadataMissing: boolean | null = null
 ): number {
   const currentDB = getDatabase()
   try {
     const stmt = currentDB.prepare(
-      'INSERT OR IGNORE INTO posts (thread_url, username, comment, posted_at, user_url) VALUES (?, ?, ?, ?, ?)'
+      'INSERT OR IGNORE INTO posts (thread_url, username, comment, posted_at, user_url, forum_post_id, post_url, thread_post_number, post_metadata_missing) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
-    const result = stmt.run(threadUrl, username, comment, postedAt, userUrl)
-    trackUser(username, postedAt)
+    const result = stmt.run(
+      threadUrl,
+      username,
+      comment,
+      postedAt,
+      userUrl,
+      forumPostId,
+      postUrl,
+      threadPostNumber,
+      postMetadataMissing
+    )
+    if (typeof result.lastInsertRowid === 'number' && result.changes > 0) {
+      trackUser(username, postedAt)
+      return result.lastInsertRowid as number
+    }
+    if (forumPostId) {
+      const lookup = currentDB.prepare(
+        'SELECT id FROM posts WHERE thread_url = ? AND forum_post_id = ? LIMIT 1'
+      )
+      const existing = lookup.get(threadUrl, forumPostId) as
+        | { id: number }
+        | undefined
+      if (existing) {
+        return existing.id
+      }
+    }
     return result.lastInsertRowid as number
   } catch (error) {
     logError(`${EMOJI_ERROR} Failed to process post:`, error as Error)
@@ -543,9 +634,6 @@ export async function saveScrapingState(
             WHERE id = 1
         `)
     stmt.run(lastSubforumUrl, lastThreadUrl, completed ? 1 : 0)
-    logInfo(
-      `${EMOJI_INFO} Scraping state saved: ${lastSubforumUrl || 'NONE'} - ${lastThreadUrl || 'NONE'} - Completed: ${completed}`
-    )
   } catch (error) {
     logError(`${EMOJI_ERROR} Failed to save scraping state:`, error as Error)
   }

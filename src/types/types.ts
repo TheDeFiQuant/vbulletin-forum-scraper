@@ -26,6 +26,10 @@ export interface Post {
   comment: string
   postedAt: string
   userUrl: string
+  forumPostId?: number | null
+  postUrl?: string | null
+  threadPostNumber?: number | null
+  postMetadataMissing?: boolean | null
 }
 
 export interface File {
@@ -56,6 +60,7 @@ export interface ScrapingStats {
     posts: number
     users: number
   }
+  currentThreadTotalPages?: number | null
   totals?: ForumStats
 }
 
@@ -80,6 +85,13 @@ export interface Config {
   MAX_POSTS_PER_THREAD: number | null
   MAX_PAGES_PER_SUBFORUM: number | null
   MAX_PAGES_PER_THREAD: number | null
+  TARGET_THREAD_URL: string | null
+  FINGERPRINT_USER_AGENT: string | null
+  FINGERPRINT_LANG: string | null
+  FINGERPRINT_TIMEZONE: string | null
+  FINGERPRINT_VIEWPORT: { width: number; height: number } | null
+  USE_PLAYWRIGHT_FETCH: boolean
+  PLAYWRIGHT_WAIT_MS: number
 }
 
 export interface ScrapingState {
@@ -89,4 +101,4 @@ export interface ScrapingState {
   completed: boolean
 }
 
-export type FetchOptions = { shouldMarkScraped?: boolean }
+export type FetchOptions = { shouldMarkScraped?: boolean; ignoreScraped?: boolean }
